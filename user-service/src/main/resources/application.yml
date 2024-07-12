@@ -1,50 +1,8 @@
 spring:
   application:
-    name: user
+    name: user-service
   profiles:
     active: local 
   config:
     import: optional:configserver:http://localhost:8888
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3306/mydb
-    username: root
-    password: password
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  sql:
-    init:
-      platform: mysql
-      mode: always
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
-        jdbc:
-          lob:
-            '[non_contextual_creation]': true
-        '[format_sql]': true
-    show-sql: true
-    defer-datasource-initialization: true
-    open-in-view: false
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: 17282809016-72du999nqaefcf2gak9thafq259nbed9.apps.googleusercontent.com
-            client-secret: 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
-            scope:
-              - profile
-              - email
-
-jwt:
-  iss: lawmate.site
-  secret: KimsionKimhojuKimhohyunParkjuhaYangdonggyuKimsionKimhojuKimhohyunParkjuhaYangdongg
-  expiration:
-    access: 600000
-    refresh: 1200000
-
-iamport:
-  key: 4083201782744821
-  secret: PPF6NYSNOb85jb8zTlcBF9U18zqMP0UgqN8yohUYtc62IgJuzUXt9u4wl4NJCguERq7U8ojQWGSFupi7yohUYtc62IgJuzUXt9u4wl4NJCguERq7U8ojQWGSFupi7
+ 

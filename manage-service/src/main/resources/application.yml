@@ -5,43 +5,4 @@ spring:
     active: local 
   config:
     import: optional:configserver:http://localhost:8888
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3306/mydb?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: root
-    password: password
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  sql:
-    init:
-      platform: mysql
-      mode: always
-
-  jpa:
-    hibernate:
-      ddl-auto: create
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
-        jdbc:
-          lob:
-            '[non_contextual_creation]': true
-        '[format_sql]': true
-    show-sql: true
-    defer-datasource-initialization: true
-#    open-in-view: true
-logging:
-  level:
-    org:
-      hibernate:
-        SQL: debug
-        type: trace
-      springframework:
-        security: debug
-        data: debug
-        web: debug
-        hibernate: debug
-        jpa: debug
-        sql: debug
-        jwt: debug
-
-server:
-    port : 8084
+  
