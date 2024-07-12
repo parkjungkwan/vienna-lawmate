@@ -1,0 +1,41 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+    web-application-type: reactive
+  application:
+    name: chat
+  profiles:
+    active: local
+  config:
+    import: optional:configserver:http://localhost:8888
+  data:
+    mongodb:
+      uri: mongodb://root:password@127.0.0.1:27017/mydb?retryWrites=true&w=majority&authSource=admin
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: debug
+        type: trace
+jwt:
+  iss: lawmate.site
+  secret: KimsionKimhojuKimhohyunParkjuhaYangdonggyuKimsionKimhojuKimhohyunParkjuhaYangdong
+  expiration:
+    access: 600000
+    refresh: 1200000
+
+# actuator 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: refresh
+  endpoint:
+    shutdown:
+      enabled: true
+server:
+  port: 8083

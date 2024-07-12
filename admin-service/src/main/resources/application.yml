@@ -1,0 +1,82 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+    web-application-type: reactive
+  application:
+    name: admin
+  profiles:
+    active: local 
+  config:
+    import: optional:configserver:http://localhost:8888
+
+  data:
+    mongodb:
+      uri: mongodb://root:password@127.0.0.1:27017/mydb?retryWrites=true&w=majority&authSource=admin&characterEncoding=UTF-8
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: password
+      username: root
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: kimhojoo51
+    password: ielchudwnctpdxvu
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  servlet:
+    multipart:
+      enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: chat-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: '*'
+          value:
+            default:
+              type: com.lawmate.model.ChatMessage
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  redis:
+    host: 192.168.99.100
+    port: 6379
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: debug
+        type: trace
+
+server:
+  port : 8082
+
+jwt:
+  issuer: lawmate.site
+  secret: KimsionKimhojuKimhohyunParkjuhaYangdonggyuKimsionKimhojuKi
+  expiration:
+    access: 600000
+    refresh: 1200000
+
+management:
+  endpoints:
+    web: 
+      exposure:
+        include: refresh
+
+
