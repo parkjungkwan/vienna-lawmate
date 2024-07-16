@@ -22,7 +22,7 @@ public class Issue extends BaseEntity {
 
     @ManyToOne
     @JoinColumn(name = "client_id")
-    private User client;
+    private UserEntity client;
 
 
     public static Issue of(String law, String title, String content, String attachment) {

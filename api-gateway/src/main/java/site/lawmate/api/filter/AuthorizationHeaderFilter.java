@@ -1,61 +1,75 @@
 package site.lawmate.api.filter;
 
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
+import site.lawmate.api.service.provider.JwtTokenProvider;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
-import java.util.Set;
+import org.springframework.web.server.ServerWebExchange;
+
+import site.lawmate.api.domain.vo.Role;
+import java.util.*;
 
 @Slf4j
 @Component
 public class AuthorizationHeaderFilter extends AbstractGatewayFilterFactory<AuthorizationHeaderFilter.Config> { //게이트웨이에서 filter를 생산
-    //    Environment env;
-//
-//    public AuthorizationHeaderFilter(Environment env) {
-//        super(Config.class);
-//        this.env = env;
-//    }
-    @Value("${jwt.secret}")
-    private String secretValue;
+    private final JwtTokenProvider jwtTokenProvider;
 
+    public AuthorizationHeaderFilter(JwtTokenProvider jwtTokenProvider){ 
+        super(Config.class);
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
+    
+    @Data
     public static class Config {
-        // Put configuration properties here
+        private String headerName;
+        private String headerValue;
+        private List<Role> roles;
     }
 
     @Override
     public GatewayFilter apply(Config config) {
-        return (exchange, chain) -> {
-            ServerHttpRequest request = exchange.getRequest();
+        return ((exchange, chain) -> {
+            log.info("Request URL: {}", exchange.getRequest().getURI());
+            if(!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION))
+                return onError(exchange, HttpStatus.UNAUTHORIZED, "No Authorization Header");
+            
+            @SuppressWarnings("null")
+            String token = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);
+            
+            if(token == null)
+                return onError(exchange, HttpStatus.UNAUTHORIZED, "No Token or Invalid Token");
 
-//            if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
-//                return onError(exchange, "No authorization header", HttpStatus.UNAUTHORIZED);
-//            }
+            String jwt = jwtTokenProvider.removeBearer(token);
 
-            HttpHeaders headers = request.getHeaders();
-            Set<String> keys = headers.keySet();
-            log.info(">>>");
-            keys.stream().forEach(v -> {
-                log.info(v + "=" + request.getHeaders().get(v));
-            });
-            log.info("<<<");
+            if(!jwtTokenProvider.isTokenValid(jwt, false))
+                return onError(exchange, HttpStatus.UNAUTHORIZED, "Invalid Token");
 
-//            String authorizationHeader = request.getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);
-//            String jwt = authorizationHeader.replace("Bearer", "");
+            List<Role> roles = jwtTokenProvider.extractRoles(jwt).stream().map(i -> Role.valueOf(i)).toList();
+            
+            for(var i : config.getRoles()){
+                if(roles.contains(i))
+                    return chain.filter(exchange);
+            }
+            
+            return onError(exchange, HttpStatus.UNAUTHORIZED, "No Permission");
+        });
+    }
 
-            // Create a cookie object
-//            ServerHttpResponse response = exchange.getResponse();
-//            ResponseCookie c1 = ResponseCookie.from("my_token", "test1234").maxAge(60 * 60 * 24).build();
-//            response.addCookie(c1);
-
-//            if (!isJwtValid(jwt)) {
-//                return onError(exchange, "JWT token is not valid", HttpStatus.UNAUTHORIZED);
-//            }
-
-            return chain.filter(exchange);
-        };
+    private Mono<Void> onError(ServerWebExchange exchange, HttpStatusCode httpStatusCode, String message){        
+        log.error("Error Occured : {}, {}, {}", exchange.getRequest().getURI(), httpStatusCode, message);
+        exchange.getResponse().setStatusCode(httpStatusCode);
+        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(message.getBytes());
+        return exchange.getResponse().writeWith(Mono.just(buffer));
     }
 
 

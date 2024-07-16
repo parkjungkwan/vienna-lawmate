@@ -24,11 +24,11 @@ public class Question extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "writer_id")
     @OnDelete(action = OnDeleteAction.CASCADE)
-    private User writer;
+    private UserEntity writer;
 
 
     @Builder(builderMethodName = "builder")
-    public Question(Long id, String law, String title, String content, User writer) {
+    public Question(Long id, String law, String title, String content, UserEntity writer) {
         this.id = id;
         this.law = law;
         this.title = title;
@@ -36,7 +36,7 @@ public class Question extends BaseEntity {
         this.writer = writer;
     }
 
-    public static Question of(String law, String title, String content, User writer) {
+    public static Question of(String law, String title, String content, UserEntity writer) {
         Question question = new Question();
         question.law = law;
         question.title = title;

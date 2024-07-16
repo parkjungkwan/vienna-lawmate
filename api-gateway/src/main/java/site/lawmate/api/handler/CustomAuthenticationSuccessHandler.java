@@ -1,23 +1,32 @@
 package site.lawmate.api.handler;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import java.net.URI;
+
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.server.WebFilterExchange;
 import org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import site.lawmate.api.domain.dto.MessengerDto;
+import site.lawmate.api.domain.model.PrincipalUserDetails;
+import site.lawmate.api.service.provider.JwtTokenProvider;
 
-@Log4j2
+
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CustomAuthenticationSuccessHandler implements ServerAuthenticationSuccessHandler {
-
     private final ObjectMapper objectMapper;
+    private final JwtTokenProvider jwtTokenProvider;
+
     @Override
     public Mono<Void> onAuthenticationSuccess(WebFilterExchange webFilterExchange, Authentication authentication) {
         log.info("::::::webFilterExchange 정보: "+webFilterExchange);
@@ -25,29 +34,59 @@ public class CustomAuthenticationSuccessHandler implements ServerAuthenticationS
         log.info("::::::getAuthorities 정보: "+authentication.getAuthorities());
         log.info("::::::getCredentials 정보: "+authentication.getCredentials());
 
-        webFilterExchange.getExchange().getResponse().setStatusCode(HttpStatus.OK);
+        webFilterExchange.getExchange().getResponse().setStatusCode(HttpStatus.FOUND);
+        webFilterExchange.getExchange().getResponse().getHeaders().setLocation(URI.create("http://localhost:3000"));
         webFilterExchange.getExchange().getResponse().getHeaders().add("Content-Type", "application/json");
 
         return webFilterExchange.getExchange().getResponse()
-                .writeWith(
-                        Mono.just(
-                                webFilterExchange.getExchange()
-                                        .getResponse()
-                                        .bufferFactory()
-                                        .wrap(
-                                                writeValueAsBytes(
-                                                        MessengerDto.builder()
-                                                                .message("로그인 성공")
-                                                                .accessToken(null)
-                                                                .refreshToken(null)
-                                                                .accessTokenExpired(null)
-                                                                .refreshTokenExpired(null)
-                                                                .build()
-                                                )
-                                        )
-                        )
-                );
+        .writeWith(
+            jwtTokenProvider.generateToken((PrincipalUserDetails)authentication.getPrincipal(), false)
+            .doOnNext(accessToken -> 
+                webFilterExchange
+                .getExchange()
+                .getResponse()
+                .getCookies()
+                .add("accessToken", 
+                    ResponseCookie.from("accessToken", accessToken)
+                    .path("/")
+                    .maxAge(jwtTokenProvider.getAccessTokenExpired())
+                    // .httpOnly(true)
+                    .build()
+                )
+            )
+            .flatMap(i -> jwtTokenProvider.generateToken((PrincipalUserDetails)authentication.getPrincipal(), true))
+            .doOnNext(refreshToken -> 
+                webFilterExchange
+                .getExchange()
+                .getResponse()
+                .getCookies()
+                .add("refreshToken", 
+                    ResponseCookie.from("refreshToken", refreshToken)
+                    .path("/")
+                    .maxAge(jwtTokenProvider.getRefreshTokenExpired())
+                    // .httpOnly(true)
+                    .build()
+                )
+            )
+            .flatMap(i -> 
+                Mono.just(
+                    MessengerDto.builder()
+                    .message("로그인 성공")
+                    .build()
+                )
+            )
+            .flatMap(messageDTO -> 
+                Mono.just(
+                    webFilterExchange.getExchange()
+                    .getResponse()
+                    .bufferFactory()
+                    .wrap(writeValueAsBytes(messageDTO))
+                )
+            )
+        );
     }
+    
+
     private byte[] writeValueAsBytes(MessengerDto messengerDTO) {
         try {
             return objectMapper.writeValueAsBytes(messengerDTO);

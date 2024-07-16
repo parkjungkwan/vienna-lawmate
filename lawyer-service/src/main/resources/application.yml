@@ -1,7 +1,7 @@
 spring:
    
     application:
-        name: admin
+        name: lawyer-service
     profiles:
         active: local 
     config:

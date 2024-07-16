@@ -13,9 +13,10 @@ import java.util.List;
 @AllArgsConstructor
 @Component
 @Getter
+@Setter
 @Builder(toBuilder = true)
 @ToString(exclude = {"id"})
-public class User extends BaseEntity {
+public class UserEntity extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -32,11 +33,14 @@ public class User extends BaseEntity {
     @NotNull
     private String picture;
 
+    @NotNull
+    private String password;
+
     @Enumerated(EnumType.STRING)
     @NotNull
     private Role role;
     @Builder
-    public User(String name, String username, String email, String picture, Role role) {
+    public UserEntity(String name, String username, String email, String picture, Role role) {
         this.name = name;
         this.username = username;
         this.email = email;
@@ -44,7 +48,7 @@ public class User extends BaseEntity {
         this.role = role;
     }
 
-    public User update(String name, String picture) {
+    public UserEntity update(String name, String picture) {
         this.name = name;
         this.picture = picture;
         return this;

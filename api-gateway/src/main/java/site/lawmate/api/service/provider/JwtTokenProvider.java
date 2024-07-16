@@ -6,26 +6,33 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Mono;
+import site.lawmate.api.domain.model.PrincipalUserDetails;
+import site.lawmate.api.domain.model.UserModel;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.GrantedAuthority;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
-
+import site.lawmate.api.domain.vo.Role;
 import javax.crypto.SecretKey;
+
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Stream;
+
+
 @Service
 @RequiredArgsConstructor
 public class JwtTokenProvider{
-    // private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
-
-    private SecretKey SECRET_KEY;
+    private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
+    
+    private ReactiveValueOperations<String, String> reactiveValueOperations;
 
     @Value("${jwt.secret}")
     private String secretKey;
@@ -43,7 +50,11 @@ public class JwtTokenProvider{
 
     @PostConstruct
     protected void init() {
-        SECRET_KEY = Keys.hmacShaKeyFor(Base64.getUrlEncoder().encode(secretKey.getBytes()));
+        reactiveValueOperations = reactiveRedisTemplate.opsForValue();
+    }
+
+    private SecretKey getSecretKey(){
+        return Keys.hmacShaKeyFor(Base64.getUrlEncoder().encode(secretKey.getBytes()));
     }
 
     public String extractEmail(String jwt){
@@ -55,15 +66,13 @@ public class JwtTokenProvider{
         return extractClaim(jwt, i -> i.get("roles", List.class));
     }
 
-    public String generateToken(UserDetails userDetails, boolean isRefreshToken){
-        return Stream.of(generateToken(Map.of(), userDetails, isRefreshToken))
-                .peek(i -> Stream.of(i)
-                        .filter(j -> isRefreshToken)
-                        // .peek(j -> tokenRedisRepository.save(TokenModel.builder().token(j).build()))
-                        .findAny()
-                        .get())
-                .findAny()
-                .get();
+    public Mono<String> generateToken(UserDetails userDetails, boolean isRefreshToken){
+        return Mono.just(generateToken(Map.of(), userDetails, isRefreshToken))
+                .flatMap(token -> 
+                    isRefreshToken 
+                    ? reactiveValueOperations.set(userDetails.getUsername(), token, Duration.ofSeconds(refreshTokenExpired)).flatMap(i -> Mono.just(token))
+                    : Mono.just(token)
+                );
     }
 
     private String generateToken(Map<String, Object> extraClaims, UserDetails userDetails, boolean isRefreshToken){
@@ -71,11 +80,11 @@ public class JwtTokenProvider{
                 .claims(extraClaims)
                 .subject(userDetails.getUsername())
                 .issuer(issuer)
-                .claim("roles", userDetails.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList())
+                .claim("roles", userDetails.getAuthorities().stream().map(i -> i.getAuthority()).toList())
                 .claim("type", isRefreshToken ? "refresh" : "access")
                 .issuedAt(Date.from(Instant.now()))
                 .expiration(Date.from(Instant.now().plusSeconds(isRefreshToken ? refreshTokenExpired : accessTokenExpired)))
-                .signWith(SECRET_KEY, Jwts.SIG.HS256)
+                .signWith(getSecretKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -86,7 +95,7 @@ public class JwtTokenProvider{
     private Claims extractAllClaims(String jwt){
         try {
             return Jwts.parser()
-                    .verifyWith(SECRET_KEY)
+                    .verifyWith(getSecretKey())
                     .build()
                     .parseSignedClaims(jwt)
                     .getPayload();
@@ -95,11 +104,33 @@ public class JwtTokenProvider{
         }
     }
 
-    public Boolean isTokenValid(String token) {
-        return !isTokenExpired(token);
+    public Boolean isTokenValid(String token, Boolean isRefreshToken) {
+        return !isTokenExpired(token)
+        && isTokenTypeEqual(token, isRefreshToken);
+    }
+
+    public Mono<Boolean> isTokenInRedis(String token){
+        return reactiveValueOperations.get(token)
+        .flatMap(i -> Mono.just(i != null));
     }
 
     private Boolean isTokenExpired(String token){
         return extractClaim(token, Claims::getExpiration).before(Date.from(Instant.now()));
+    }
+
+    private Boolean isTokenTypeEqual(String token, Boolean isRefreshToken){
+        return extractClaim(token, i -> i.get("type", String.class)).equals(isRefreshToken ? "refresh" : "access");
+    }
+
+    public String removeBearer(String bearerToken){
+        return bearerToken.replace("Bearer ", "");
+    }
+
+    public PrincipalUserDetails extractPrincipalUserDetails(String jwt){
+        return new PrincipalUserDetails(UserModel.builder().email(extractEmail(jwt)).roles(extractRoles(jwt).stream().map(i -> Role.valueOf(i)).toList()).build());
+    }
+
+    public Mono<Boolean> removeTokenInRedis(String token){
+        return reactiveValueOperations.delete(token);
     }
 }

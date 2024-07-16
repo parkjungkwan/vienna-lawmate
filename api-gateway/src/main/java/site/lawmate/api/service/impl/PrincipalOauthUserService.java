@@ -1,5 +1,7 @@
 package site.lawmate.api.service.impl;
 
+import java.util.List;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.client.userinfo.DefaultReactiveOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -9,15 +11,13 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import lombok.RequiredArgsConstructor;
-import reactor.core.publisher.Mono;
 import site.lawmate.api.domain.model.OAuth2UserInfo;
 import site.lawmate.api.domain.model.PrincipalUserDetails;
 import site.lawmate.api.domain.model.UserModel;
+import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Mono;
 import site.lawmate.api.domain.vo.Registration;
 import site.lawmate.api.domain.vo.Role;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -28,37 +28,35 @@ public class PrincipalOauthUserService implements ReactiveOAuth2UserService<OAut
     public Mono<OAuth2User> loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
 
         return new DefaultReactiveOAuth2UserService()
-                .loadUser(userRequest)
-                .log()
-                .flatMap(user -> Mono.just(user.getAttributes()))
-                .flatMap(attributes ->
-                        Mono.just(userRequest.getClientRegistration().getClientName())
-                                .log()
-                                .flatMap(clientId -> Mono.just(Registration.getRegistration(clientId)))
-                                .flatMap(registration ->
-                                        Mono.just(OAuth2UserInfo.of(registration, attributes))
-                                                .flatMap(oAuth2UserInfo ->
-                                                        Mono.just(
-                                                                        UserModel.builder()
-                                                                                .id(oAuth2UserInfo.id())
-                                                                                .email(oAuth2UserInfo.email())
-                                                                                .name(oAuth2UserInfo.name())
-                                                                                .profile(oAuth2UserInfo.profile())
-                                                                                .roles(List.of(Role.ROLE_USER))
-                                                                                .registration(registration)
-                                                                                .build()
-                                                                )
-                                                                .filterWhen(i ->
-                                                                        webClient.post()
-                                                                                .uri("lb://user-service/auth/oauth2/" + i.getRegistration().name().toLowerCase())
-                                                                                .accept(MediaType.APPLICATION_JSON)
-                                                                                .bodyValue(i)
-                                                                                .retrieve()
-                                                                                .bodyToMono(Boolean.class)
-                                                                )
-                                                                .flatMap(user -> Mono.just(new PrincipalUserDetails(user, attributes)))
-                                                )
-                                )
-                );
+        .loadUser(userRequest)
+        .log()
+        .flatMap(user -> Mono.just(user.getAttributes()))
+        .flatMap(attributes -> 
+            Mono.just(userRequest.getClientRegistration().getClientName())
+            .log()
+            .flatMap(clientId -> Mono.just(Registration.valueOf(clientId.toUpperCase())))
+            .flatMap(registration -> 
+                Mono.just(OAuth2UserInfo.of(registration, attributes))
+                // .flatMap(oauth2UserDTO -> 
+                //     webClient.post()
+                //     .uri("lb://user-service/auth/oauth2/" + registration.name().toLowerCase())
+                //     .accept(MediaType.APPLICATION_JSON)
+                //     .bodyValue(oauth2UserDTO)
+                //     .retrieve()
+                //     .bodyToMono(PrincipalUserDetails.class)
+                // )
+                .flatMap(oauth2UserInfo -> 
+                    Mono.just(new PrincipalUserDetails(
+                        UserModel.builder()
+                            .email(oauth2UserInfo.email())
+                            .name(oauth2UserInfo.name())
+                            .profile(oauth2UserInfo.profile())
+                            .roles(List.of(Role.ROLE_USER))
+                            .build(),
+                        attributes
+                )))
+            )
+        )
+        ;
     }
 }
